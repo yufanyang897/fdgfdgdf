@@ -1,0 +1,31 @@
+{
+  "name": "teleprompter",
+  "version": "1.0.0",
+  "description": "智能提词器 — 语音自动跟踪滚动的手机提词应用",
+  "main": "index.html",
+  "scripts": {
+    "sync": "npx cap sync",
+    "open:ios": "npx cap open ios",
+    "open:android": "npx cap open android",
+    "build:ios": "npx cap sync ios && npx cap open ios",
+    "build:android": "npx cap sync android && npx cap open android",
+    "serve": "npx serve -l 3000",
+    "icons": "start tools/generate-icons.html"
+  },
+  "keywords": [
+    "teleprompter",
+    "speech-recognition",
+    "pwa"
+  ],
+  "license": "MIT",
+  "devDependencies": {
+    "@capacitor/android": "^6.0.0",
+    "@capacitor/cli": "^6.0.0",
+    "@capacitor/core": "^6.0.0",
+    "@capacitor/ios": "^6.0.0",
+    "serve": "^14.0.0"
+  },
+  "dependencies": {
+    "sharp": "^0.35.1"
+  }
+}

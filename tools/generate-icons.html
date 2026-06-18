@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>图标生成器 — 智能提词器</title>
+<style>
+  body { font-family: -apple-system, sans-serif; max-width: 600px; margin: 40px auto; padding: 20px; background: #111; color: #fff; }
+  h1 { font-size: 24px; }
+  .preview { display: flex; gap: 20px; flex-wrap: wrap; margin: 20px 0; }
+  .preview canvas { border: 1px solid #333; border-radius: 16px; }
+  button { background: #ffcc00; color: #000; border: none; padding: 14px 28px; font-size: 16px; font-weight: 700; border-radius: 12px; cursor: pointer; }
+  button:hover { opacity: 0.85; }
+  .info { color: #888; font-size: 13px; margin-top: 16px; }
+  a { color: #ffcc00; }
+</style>
+</head>
+<body>
+<h1>🎨 提词器图标生成器</h1>
+<p>点击按钮生成所有尺寸的图标并自动下载</p>
+<div class="preview">
+  <div><canvas id="c192" width="192" height="192"></canvas><p style="text-align:center;color:#888;">192×192</p></div>
+  <div><canvas id="c512" width="512" height="512"></canvas><p style="text-align:center;color:#888;">512×512</p></div>
+  <div><canvas id="c180" width="180" height="180"></canvas><p style="text-align:center;color:#888;">180×180 (iOS)</p></div>
+</div>
+<button onclick="generateAll()">⬇ 生成并下载所有图标</button>
+<p class="info">下载后请将 PNG 文件放入 <code>icons/</code> 目录</p>
+<script>
+function drawIcon(canvas, size) {
+  const ctx = canvas.getContext('2d');
+  const s = size;
+  // 背景渐变
+  const bg = ctx.createLinearGradient(0, 0, s, s);
+  bg.addColorStop(0, '#1a1a2e');
+  bg.addColorStop(1, '#0f0f1a');
+  ctx.fillStyle = bg;
+  ctx.beginPath(); ctx.roundRect(0, 0, s, s, s*0.18); ctx.fill();
+
+  // 提词器屏幕
+  const margin = s * 0.18;
+  const screenW = s - margin * 2;
+  const screenH = s * 0.55;
+  const screenX = margin;
+  const screenY = s * 0.12;
+
+  ctx.fillStyle = '#000';
+  ctx.beginPath(); ctx.roundRect(screenX, screenY, screenW, screenH, s*0.06); ctx.fill();
+  ctx.strokeStyle = '#333';
+  ctx.lineWidth = s * 0.02;
+  ctx.beginPath(); ctx.roundRect(screenX, screenY, screenW, screenH, s*0.06); ctx.stroke();
+
+  // 文字线条
+  ctx.fillStyle = '#ffcc00';
+  const lineH = s * 0.028;
+  const lineGap = s * 0.045;
+  const lineW = screenW * 0.75;
+  const lineX = screenX + screenW * 0.12;
+
+  for (let i = 0; i < 4; i++) {
+    const y = screenY + screenH * 0.22 + i * (lineH + lineGap);
+    const alpha = 1 - i * 0.18;
+    ctx.globalAlpha = alpha;
+    ctx.fillStyle = i === 1 ? '#fff' : '#ffcc00';
+    ctx.beginPath(); ctx.roundRect(lineX, y, lineW * (1 - i * 0.08), lineH, lineH/2); ctx.fill();
+  }
+  ctx.globalAlpha = 1;
+
+  // 高亮条
+  ctx.fillStyle = '#ffcc00';
+  const hlW = s * 0.008;
+  const hlX = screenX + screenW * 0.08;
+  const hlY = screenY + screenH * 0.22 + lineH + lineGap * 0.5;
+  ctx.beginPath(); ctx.roundRect(hlX, hlY - s*0.015, hlW, lineH + s*0.03, hlW/2); ctx.fill();
+
+  // 底部麦克风图标
+  const micY = screenY + screenH + s * 0.06;
+  const micX = s / 2;
+  const micR = s * 0.06;
+  ctx.fillStyle = '#ffcc00';
+  // 简化麦克风
+  ctx.beginPath();
+  ctx.arc(micX, micY, micR, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = '#ffcc00';
+  ctx.fillRect(micX - s*0.015, micY + micR*0.3, s*0.03, s*0.08);
+  ctx.beginPath();
+  ctx.roundRect(micX - s*0.035, micY + micR*0.6, s*0.07, s*0.025, s*0.012);
+  ctx.fill();
+
+  // 底部文字 "T"
+  ctx.fillStyle = '#ffcc00';
+  ctx.font = `bold ${s*0.14}px -apple-system, sans-serif`;
+  ctx.textAlign = 'center';
+  ctx.fillText('T', s/2, screenY + screenH + s * 0.22);
+}
+
+function generateAll() {
+  const sizes = [
+    { id: 'c192', fileName: 'icon-192.png', size: 192 },
+    { id: 'c512', fileName: 'icon-512.png', size: 512 },
+    { id: 'c180', fileName: 'icon-180.png', size: 180 },
+  ];
+
+  sizes.forEach(({ id, fileName, size }) => {
+    const canvas = document.getElementById(id);
+    drawIcon(canvas, size);
+    // 触发下载
+    canvas.toBlob((blob) => {
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = fileName;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    }, 'image/png');
+  });
+
+  // 也生成一个 SVG 版本
+  const svgContent = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <defs><linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#1a1a2e"/><stop offset="1" stop-color="#0f0f1a"/></linearGradient></defs>
+  <rect width="512" height="512" rx="92" fill="url(#bg)"/>
+  <rect x="92" y="62" width="328" height="282" rx="31" fill="#000" stroke="#333" stroke-width="10"/>
+  <rect x="130" y="125" width="246" height="14" rx="7" fill="#ffcc00" opacity="0.6"/>
+  <rect x="130" y="155" width="260" height="14" rx="7" fill="#fff"/>
+  <rect x="122" y="147" width="4" height="32" rx="2" fill="#ffcc00"/>
+  <rect x="130" y="185" width="230" height="14" rx="7" fill="#ffcc00" opacity="0.78"/>
+  <rect x="130" y="215" width="240" height="14" rx="7" fill="#ffcc00" opacity="0.6"/>
+  <circle cx="256" cy="390" r="30" fill="#ffcc00"/>
+  <rect x="248" y="405" width="16" height="40" rx="8" fill="#ffcc00"/>
+  <rect x="238" y="430" width="36" height="12" rx="6" fill="#ffcc00"/>
+  <text x="256" y="480" font-size="72" font-weight="bold" fill="#ffcc00" text-anchor="middle" font-family="system-ui, sans-serif">T</text>
+</svg>`;
+  const svgBlob = new Blob([svgContent], { type: 'image/svg+xml' });
+  const svgUrl = URL.createObjectURL(svgBlob);
+  const a = document.createElement('a');
+  a.href = svgUrl; a.download = 'icon.svg';
+  document.body.appendChild(a); a.click();
+  document.body.removeChild(a); URL.revokeObjectURL(svgUrl);
+}
+</script>
+</body>
+</html>

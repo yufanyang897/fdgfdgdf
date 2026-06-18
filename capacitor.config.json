@@ -1,0 +1,29 @@
+{
+  "appId": "com.teleprompter.smartcue",
+  "appName": "智能提词器",
+  "webDir": ".",
+  "backgroundColor": "#000000",
+  "server": {
+    "androidScheme": "https"
+  },
+  "ios": {
+    "contentInset": "always",
+    "preferredContentMode": "mobile",
+    "allowsLinkPreview": false,
+    "limitsNavigationsToAppBoundDomains": true
+  },
+  "android": {
+    "backgroundColor": "#000000",
+    "allowMixedContent": false
+  },
+  "plugins": {
+    "SplashScreen": {
+      "launchShowDuration": 1000,
+      "backgroundColor": "#000000",
+      "showSpinner": false
+    },
+    "Keyboard": {
+      "resize": "none"
+    }
+  }
+}

@@ -1,0 +1,1488 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#000000">
+
+<!-- PWA Manifest -->
+<link rel="manifest" href="./manifest.json">
+<meta name="apple-mobile-web-app-title" content="提词器">
+
+<!-- iOS 图标 (180×180) -->
+<link rel="apple-touch-icon" href="./icons/icon-180.png">
+<link rel="apple-touch-icon" sizes="180x180" href="./icons/icon-180.png">
+
+<!-- iOS 启动图 (iPhone 14/15/16 Pro 尺寸) -->
+<link rel="apple-touch-startup-image" media="screen and (device-width: 393px) and (device-height: 852px) and (-webkit-device-pixel-ratio: 3)" href="./screenshots/launch.png">
+
+<!-- Safari 固定标签页图标 -->
+<link rel="mask-icon" href="./icons/icon.svg" color="#ffcc00">
+
+<title>智能提词器</title>
+<style>
+  :root {
+    --bg: #000;
+    --text: #fff;
+    --text-current: #ffcc00;
+    --text-spoken: #888;
+    --control-bg: rgba(30,30,30,0.95);
+    --accent: #ffcc00;
+    --accent2: #ff4444;
+    --slider-track: #444;
+    --safe-bottom: env(safe-area-inset-bottom, 16px);
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  html, body {
+    width: 100%; height: 100%;
+    overflow: hidden;
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Helvetica Neue", sans-serif;
+    -webkit-tap-highlight-color: transparent;
+    -webkit-user-select: none;
+    user-select: none;
+    touch-action: manipulation;
+  }
+
+  /* ============ 主视区 ============ */
+  #app {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    width: 100%;
+  }
+
+  /* ============ 提词器显示区 ============ */
+  #prompter-view {
+    flex: 1;
+    overflow: hidden;
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 8vh 6vw;
+    /* 镜像模式由 JS 切换 class */
+  }
+
+  #prompter-view.mirror {
+    transform: scaleX(-1);
+  }
+
+  #prompter-text {
+    width: 100%;
+    max-height: 100%;
+    font-size: var(--font-size, 42px);
+    line-height: 1.6;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+    text-align: center;
+    word-break: break-word;
+    transition: transform 0.1s linear;
+    will-change: transform;
+  }
+
+  /* 每个词/字符的包裹 */
+  .word {
+    display: inline;
+    transition: color 0.25s ease, opacity 0.25s ease;
+    color: var(--text);
+    opacity: 0.45;
+  }
+
+  .word.current {
+    color: var(--text-current);
+    opacity: 1;
+    text-shadow: 0 0 24px rgba(255,204,0,0.5);
+  }
+
+  .word.spoken {
+    color: var(--text-spoken);
+    opacity: 0.3;
+  }
+
+  .word.pre-read {
+    color: var(--text);
+    opacity: 0.8;
+  }
+
+  /* ============ 脚本编辑面板 ============ */
+  #editor-panel {
+    position: fixed;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(0,0,0,0.95);
+    z-index: 100;
+    display: flex;
+    flex-direction: column;
+    padding: 16px;
+    padding-top: max(16px, env(safe-area-inset-top));
+    padding-bottom: var(--safe-bottom);
+    transform: translateY(100%);
+    transition: transform 0.3s ease;
+  }
+
+  #editor-panel.open {
+    transform: translateY(0);
+  }
+
+  #script-editor {
+    flex: 1;
+    width: 100%;
+    background: #1a1a1a;
+    color: #fff;
+    border: 1px solid #333;
+    border-radius: 12px;
+    padding: 16px;
+    font-size: 16px;
+    line-height: 1.8;
+    resize: none;
+    -webkit-user-select: text;
+    user-select: text;
+    font-family: inherit;
+  }
+
+  #editor-panel .btn-row {
+    display: flex;
+    gap: 10px;
+    margin-top: 12px;
+  }
+
+  #editor-panel .btn-row button {
+    flex: 1;
+  }
+
+  /* ============ 底部控制栏 ============ */
+  #controls {
+    background: var(--control-bg);
+    padding: 12px 16px calc(12px + var(--safe-bottom));
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    z-index: 10;
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+  }
+
+  .btn-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  button {
+    background: #333;
+    color: #fff;
+    border: none;
+    border-radius: 10px;
+    padding: 10px 16px;
+    font-size: 15px;
+    font-weight: 600;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    transition: background 0.15s, transform 0.1s;
+    white-space: nowrap;
+    min-height: 44px;
+    font-family: inherit;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  button:active {
+    transform: scale(0.96);
+  }
+
+  button.primary {
+    background: var(--accent);
+    color: #000;
+    font-size: 16px;
+    flex: 1;
+  }
+
+  button.danger {
+    background: var(--accent2);
+  }
+
+  button.icon-btn {
+    width: 44px;
+    min-width: 44px;
+    padding: 0;
+    font-size: 20px;
+    border-radius: 50%;
+  }
+
+  button.active {
+    background: var(--accent);
+    color: #000;
+  }
+
+  /* ============ 滑块 ============ */
+  .slider-group {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex: 1;
+    font-size: 13px;
+    color: #aaa;
+    min-width: 0;
+  }
+
+  .slider-group label {
+    white-space: nowrap;
+    font-size: 13px;
+    min-width: 36px;
+  }
+
+  input[type="range"] {
+    -webkit-appearance: none;
+    flex: 1;
+    height: 6px;
+    border-radius: 3px;
+    background: var(--slider-track);
+    outline: none;
+    min-width: 40px;
+  }
+
+  input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    background: var(--accent);
+    cursor: pointer;
+    border: none;
+  }
+
+  .speed-val {
+    font-size: 12px;
+    color: var(--accent);
+    font-weight: 700;
+    min-width: 32px;
+    text-align: center;
+  }
+
+  /* ============ 状态指示 ============ */
+  #status-bar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 16px;
+    background: #111;
+    font-size: 12px;
+    color: #888;
+    min-height: 28px;
+  }
+
+  .status-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: #555;
+    flex-shrink: 0;
+  }
+
+  .status-dot.listening {
+    background: #0f0;
+    animation: pulse 0.8s ease-in-out infinite;
+  }
+
+  .status-dot.speaking {
+    background: var(--accent);
+    box-shadow: 0 0 8px var(--accent);
+  }
+
+  @keyframes pulse {
+    0%,100% { opacity: 0.4; transform: scale(1); }
+    50% { opacity: 1; transform: scale(1.6); }
+  }
+
+  #interim-text {
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 11px;
+    color: #666;
+    min-width: 0;
+  }
+
+  /* ============ 摄像头预览 ============ */
+  #camera-wrap {
+    display: none;
+    position: absolute;
+    top: max(12px, env(safe-area-inset-top));
+    left: 50%;
+    transform: translateX(-50%);
+    width: 90px;
+    height: 90px;
+    border-radius: 50%;
+    overflow: hidden;
+    z-index: 20;
+    border: 3px solid rgba(255,255,255,0.3);
+    box-shadow: 0 0 20px rgba(0,0,0,0.6);
+    background: #000;
+  }
+  #camera-wrap.on { display: block; }
+  #camera-video {
+    width: 100%; height: 100%;
+    object-fit: cover;
+    transform: scaleX(-1);
+  }
+  #camera-border {
+    position: absolute;
+    top: 0; left: 0; right: 0; bottom: 0;
+    border-radius: 50%;
+    border: 1px solid rgba(255,255,255,0.15);
+    pointer-events: none;
+  }
+  #rec-dot {
+    display: none;
+    position: absolute;
+    top: 8px; right: 12px;
+    width: 10px; height: 10px;
+    border-radius: 50%;
+    background: #ff3b30;
+    box-shadow: 0 0 6px #ff3b30;
+    animation: recPulse 1s ease-in-out infinite;
+  }
+  #rec-dot.active { display: block; }
+  @keyframes recPulse {
+    0%,100% { opacity: 1; }
+    50% { opacity: 0.3; }
+  }
+  #prompter-view.has-camera #prompter-text {
+    padding-top: 110px;
+  }
+  #rec-timer {
+    display: none;
+    color: #ff3b30;
+    font-size: 12px;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+  }
+  #rec-timer.show { display: inline; }
+
+  /* ============ 响应式 ============ */
+  @media (max-width: 400px) {
+    #prompter-text { --font-size: 32px; }
+    button { padding: 8px 12px; font-size: 13px; min-height: 38px; }
+    button.icon-btn { width: 38px; min-width: 38px; }
+  }
+
+  @media (min-width: 768px) {
+    #prompter-text { --font-size: 56px; }
+    #prompter-view { padding: 10vh 10vw; }
+  }
+
+  /* 横屏手机 */
+  @media (max-width: 850px) and (orientation: landscape) {
+    #prompter-text { --font-size: 28px; line-height: 1.4; }
+    #prompter-view { padding: 4vh 8vw; }
+    #controls { padding: 6px 12px calc(6px + var(--safe-bottom)); gap: 6px; }
+    button { min-height: 34px; padding: 6px 10px; font-size: 12px; }
+    #status-bar { min-height: 22px; font-size: 10px; padding: 2px 12px; }
+  }
+
+  /* 伪全屏降级（iOS 不支持标准全屏时使用） */
+  body.pseudo-fullscreen #status-bar,
+  body.pseudo-fullscreen #controls {
+    display: none;
+  }
+  body.pseudo-fullscreen #prompter-view {
+    height: 100vh;
+    padding-top: max(3vh, env(safe-area-inset-top));
+    padding-bottom: max(3vh, env(safe-area-inset-bottom));
+  }
+</style>
+</head>
+<body>
+
+<div id="app">
+  <!-- 状态栏 -->
+  <div id="status-bar">
+    <span class="status-dot" id="status-dot"></span>
+    <span id="status-label">就绪</span>
+    <span id="rec-timer"></span>
+    <span id="interim-text"></span>
+    <span id="position-info"></span>
+  </div>
+
+  <!-- 提词器显示 -->
+  <div id="prompter-view">
+    <!-- 前置摄像头预览（靠近 iPhone 顶部镜头位置） -->
+    <div id="camera-wrap">
+      <video id="camera-video" autoplay playsinline muted></video>
+      <div id="camera-border"></div>
+      <span id="rec-dot"></span>
+    </div>
+    <div id="prompter-text">
+      <span style="opacity:0.3;color:#888;">在此粘贴或编辑你的脚本…</span>
+    </div>
+  </div>
+
+  <!-- 画中画渲染用的隐藏画布和视频 -->
+  <canvas id="pip-canvas" width="400" height="300" style="display:none;"></canvas>
+  <video id="pip-video" muted playsinline loop style="display:none;"></video>
+
+  <!-- 控制栏 -->
+  <div id="controls">
+    <!-- 第一行：主控制 -->
+    <div class="btn-row">
+      <button id="btn-script" title="编辑脚本">📝</button>
+      <button id="btn-start" class="primary">🎤 开始提词</button>
+      <button id="btn-camera" title="摄像头开关">📷</button>
+      <button id="btn-record" title="开始录像" disabled>⏺</button>
+      <button id="btn-mirror" title="镜像翻转">🪞</button>
+      <button id="btn-fullscreen" title="画中画浮窗">🖼</button>
+      <button id="btn-reset" title="回到开头">↺</button>
+    </div>
+
+    <!-- 第二行：速度 & 字号 -->
+    <div class="btn-row">
+      <div class="slider-group">
+        <label>速度</label>
+        <input type="range" id="speed-slider" min="0.5" max="3" step="0.1" value="1">
+        <span class="speed-val" id="speed-val">1×</span>
+      </div>
+      <div class="slider-group">
+        <label>字号</label>
+        <input type="range" id="font-slider" min="20" max="72" step="2" value="42">
+      </div>
+    </div>
+  </div>
+
+  <!-- 脚本编辑面板 -->
+  <div id="editor-panel">
+    <textarea id="script-editor" placeholder="在此粘贴或输入你的讲稿…&#10;&#10;每行一段，开始提词后 AI 会自动跟随你的语速滚动文案。"></textarea>
+    <div class="btn-row">
+      <button id="btn-editor-cancel">取消</button>
+      <button id="btn-editor-apply" class="primary">✅ 确认并加载</button>
+    </div>
+  </div>
+</div>
+
+<script>
+(function() {
+  // ===================== DOM 引用 =====================
+  const $ = (sel) => document.querySelector(sel);
+  const prompterView = $('#prompter-view');
+  const prompterText = $('#prompter-text');
+  const statusDot = $('#status-dot');
+  const statusLabel = $('#status-label');
+  const interimTextEl = $('#interim-text');
+  const positionInfo = $('#position-info');
+  const scriptEditor = $('#script-editor');
+  const editorPanel = $('#editor-panel');
+  const speedSlider = $('#speed-slider');
+  const speedVal = $('#speed-val');
+  const fontSlider = $('#font-slider');
+  const btnStart = $('#btn-start');
+  const btnMirror = $('#btn-mirror');
+  const btnCamera = $('#btn-camera');
+  const btnRecord = $('#btn-record');
+  const btnFullscreen = $('#btn-fullscreen');
+  const cameraWrap = $('#camera-wrap');
+  const cameraVideo = $('#camera-video');
+  const recDot = $('#rec-dot');
+  const recTimer = $('#rec-timer');
+
+  // ===================== 状态 =====================
+  let words = [];                    // 分词后的数组: [{text, charStart, charEnd}]
+  let currentWordIndex = -1;
+  let isRunning = false;
+  let isListening = false;          // 语音识别是否开启
+  let isMirror = false;
+  let manualSpeed = 1.0;            // 手动速度倍率 (1 = 默认语速 ~4字/秒)
+  let baseCPS = 4;                  // 基准语速: 字/秒 (中文普通话约 3-5 字/秒)
+  let fontSize = 42;
+  let scrollRAF = null;
+  let lastScrollTime = 0;
+  let userSpeechCPS = null;         // 用户真实语速 (通过语音识别推算)
+  let speechHistory = [];           // [{time, charIndex}]
+  let recognition = null;
+  let interimBuffer = '';
+  let lastRecognizedText = '';
+  const pipCanvas = $('#pip-canvas');
+  const pipVideo = $('#pip-video');
+
+  // 摄像头 & 录像
+  let cameraStream = null;
+  let mediaRecorder = null;
+  let recordedChunks = [];
+  let isRecording = false;
+  let recStartTime = 0;
+  let recTimerInterval = null;
+  // 画中画渲染
+  let pipAnimId = null;
+  let pipActive = false;
+  let recognitionRestartTimer = null;
+
+  // ===================== 初始化 =====================
+  function init() {
+    // 加载保存的设置
+    const saved = loadSettings();
+    if (saved.script) scriptEditor.value = saved.script;
+    if (saved.fontSize) { fontSize = saved.fontSize; fontSlider.value = fontSize; }
+    if (saved.speed) { manualSpeed = saved.speed; speedSlider.value = manualSpeed; }
+    if (saved.mirror) { isMirror = saved.mirror; }
+
+    applyFontSize();
+    applyMirror();
+    updateSpeedDisplay();
+    updateMirrorButton();
+
+    if (scriptEditor.value.trim()) {
+      loadScript(scriptEditor.value);
+    }
+
+    // 事件绑定
+    bindEvents();
+    initSpeechRecognition();
+  }
+
+  // ===================== 分词 =====================
+  function tokenize(text) {
+    // 按标点 + 空格分割，保留所有 token
+    const tokens = [];
+    const regex = /[一-鿿]+|[a-zA-Z0-9]+|[^\s\w一-鿿]+/g;
+    let match;
+    let idx = 0;
+    while ((match = regex.exec(text)) !== null) {
+      tokens.push({
+        text: match[0],
+        charStart: match.index,
+        charEnd: match.index + match[0].length,
+        globalIndex: idx++
+      });
+    }
+    return tokens;
+  }
+
+  function loadScript(text) {
+    words = tokenize(text);
+    cleanWordCache = [];             // 重置缓存
+    currentWordIndex = -1;
+    lastRecognizedText = '';
+    speechHistory = [];
+    renderAllWords();
+    prompterText.style.transform = 'translateY(0)';
+    updatePositionInfo();
+  }
+
+  function renderAllWords() {
+    if (words.length === 0) {
+      prompterText.innerHTML = '<span style="opacity:0.3;color:#888;">在此粘贴或编辑你的脚本…</span>';
+      return;
+    }
+    prompterText.innerHTML = words.map((w, i) =>
+      `<span class="word" data-i="${i}">${escapeHTML(w.text)}</span>`
+    ).join(' ');
+  }
+
+  function escapeHTML(str) {
+    const div = document.createElement('div');
+    div.textContent = str;
+    return div.innerHTML;
+  }
+
+  // ===================== 高亮当前词 =====================
+  function highlightWord(index) {
+    if (index < 0 || index >= words.length) return;
+    const allSpans = prompterText.querySelectorAll('.word');
+    allSpans.forEach((span, i) => {
+      span.classList.remove('current', 'spoken', 'pre-read');
+      if (i < index) span.classList.add('spoken');
+      else if (i === index) span.classList.add('current');
+      else if (i <= index + 3) span.classList.add('pre-read');
+    });
+    currentWordIndex = index;
+    updatePositionInfo();
+  }
+
+  function updatePositionInfo() {
+    const total = words.length;
+    const cur = currentWordIndex + 1;
+    if (total > 0 && cur > 0) {
+      positionInfo.textContent = `${cur}/${total}`;
+    } else if (total > 0) {
+      positionInfo.textContent = `共 ${total} 词`;
+    } else {
+      positionInfo.textContent = '';
+    }
+  }
+
+  // ===================== 滚动逻辑 =====================
+  function scrollToWord(index) {
+    if (index < 0 || index >= words.length) return;
+    const allSpans = prompterText.querySelectorAll('.word');
+    if (!allSpans[index]) return;
+
+    const spanRect = allSpans[index].getBoundingClientRect();
+    const viewRect = prompterView.getBoundingClientRect();
+
+    // 目标：让当前词在视口的 1/3 位置（偏上，便于预读）
+    const targetTop = viewRect.top + viewRect.height * 0.3;
+    const offset = spanRect.top - targetTop;
+
+    const currentTransform = getCurrentTranslateY();
+    const newTransform = currentTransform - offset;
+
+    // 限制滚动范围
+    const maxScroll = 0;
+    const textHeight = prompterText.scrollHeight;
+    const viewHeight = viewRect.height;
+    const minScroll = -(textHeight - viewHeight * 0.5);
+
+    const clamped = Math.max(minScroll, Math.min(maxScroll, newTransform));
+    prompterText.style.transform = `translateY(${clamped}px)`;
+
+    lastScrollTime = performance.now();
+  }
+
+  function getCurrentTranslateY() {
+    const transform = prompterText.style.transform;
+    const match = transform.match(/translateY\(([-\d.]+)px\)/);
+    return match ? parseFloat(match[1]) : 0;
+  }
+
+  // 混合滚动循环 — 语音驱动为主，手动匀速为兜底
+  function manualScrollLoop(timestamp) {
+    if (!isRunning) { scrollRAF = null; return; }
+    if (words.length > 0 && currentWordIndex >= 0) {
+      const elapsed = (timestamp - lastScrollTime) / 1000;
+      // 语音活跃时放宽容忍度（让语音匹配主导），否则用匀速推进
+      const interval = isListening ? 0.5 : 0.05;
+      if (elapsed > interval) {
+        const cps = baseCPS * manualSpeed;
+        const charsPerFrame = cps * elapsed;
+        const advance = Math.max(0.5, charsPerFrame / 3);
+        const targetIdx = Math.min(words.length - 1,
+          Math.max(currentWordIndex, Math.floor(currentWordIndex + advance)));
+        if (targetIdx > currentWordIndex) {
+          highlightWord(targetIdx);
+          scrollToWord(targetIdx);
+          lastScrollTime = timestamp;
+        }
+      }
+      // 持续微调滚动位置，保证当前词始终在视野中
+      if (currentWordIndex >= 0) {
+        const allSpans = prompterText.querySelectorAll('.word');
+        if (allSpans[currentWordIndex]) {
+          scrollToWord(currentWordIndex);
+        }
+      }
+    }
+    scrollRAF = requestAnimationFrame(manualScrollLoop);
+  }
+
+  // ===================== 语音识别 =====================
+  function initSpeechRecognition() {
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SpeechRecognition) {
+      statusLabel.textContent = '⚠️ 浏览器不支持语音';
+      return;
+    }
+
+    recognition = new SpeechRecognition();
+    recognition.lang = 'zh-CN';
+    recognition.continuous = true;
+    recognition.interimResults = true;
+    recognition.maxAlternatives = 3;
+
+    recognition.onstart = () => {
+      isListening = true;
+      interimBuffer = '';
+      lastRecognizedText = '';
+      statusDot.classList.add('listening');
+      statusDot.classList.remove('speaking');
+      statusLabel.textContent = '🎤 正在听…';
+      updateStartButton();
+    };
+
+    recognition.onend = () => {
+      isListening = false;
+      statusDot.classList.remove('listening', 'speaking');
+      if (isRunning) {
+        statusLabel.textContent = '🔄 重连中…';
+        // 自动重启语音识别
+        if (recognitionRestartTimer) clearTimeout(recognitionRestartTimer);
+        recognitionRestartTimer = setTimeout(() => {
+          if (isRunning && !isListening) {
+            try { recognition.start(); } catch(e) { /* ignore */ }
+          }
+        }, 300);
+      } else {
+        statusLabel.textContent = '就绪';
+      }
+      updateStartButton();
+    };
+
+    recognition.onerror = (e) => {
+      console.warn('Speech error:', e.error);
+      if (e.error === 'not-allowed') {
+        statusLabel.textContent = '❌ 麦克风权限被拒';
+        isListening = false;
+        updateStartButton();
+      } else if (e.error === 'no-speech') {
+        if (isRunning) statusLabel.textContent = '🎤 等待语音…';
+      } else {
+        statusLabel.textContent = `⚠️ ${e.error}`;
+      }
+    };
+
+    recognition.onaudiostart = () => {
+      statusDot.classList.add('speaking');
+      statusDot.classList.add('listening');
+      statusLabel.textContent = '🔊 检测到语音';
+    };
+
+    recognition.onaudioend = () => {
+      statusDot.classList.remove('speaking');
+    };
+
+    recognition.onresult = (event) => {
+      let interim = '';
+      let finalText = '';
+
+      for (let i = event.resultIndex; i < event.results.length; i++) {
+        const result = event.results[i];
+        if (result.isFinal) {
+          finalText += result[0].transcript;
+        } else {
+          interim += result[0].transcript;
+        }
+      }
+
+      // 更新临时文本显示
+      interimTextEl.textContent = interim ? `"${interim}"` : '';
+
+      // 用已确认的文本进行匹配
+      if (finalText) {
+        lastRecognizedText += finalText;
+        matchAndScroll(lastRecognizedText);
+      }
+
+      // 用临时结果也尝试匹配（辅助定位）
+      if (interim && words.length > 0) {
+        const combined = lastRecognizedText + interim;
+        matchAndScroll(combined);
+      }
+    };
+  }
+
+  // 预编译：每个词的"干净文本"缓存
+  let cleanWordCache = [];
+
+  function getCleanWord(idx) {
+    if (cleanWordCache[idx] !== undefined) return cleanWordCache[idx];
+    const c = words[idx].text.replace(/[^一-鿿㐀-䶿a-zA-Z0-9]/g, '').toLowerCase();
+    cleanWordCache[idx] = c;
+    return c;
+  }
+
+  function matchAndScroll(recognizedText) {
+    if (words.length === 0) return;
+
+    // 清理识别文本：只保留中文、英文、数字
+    const cleanRecognized = recognizedText.replace(/[^一-鿿㐀-䶿a-zA-Z0-9]/g, '').toLowerCase();
+    if (cleanRecognized.length < 3) return;
+
+    // 在当前位置附近搜索最佳匹配
+    const searchStart = Math.max(0, currentWordIndex - 5);
+    const searchEnd = Math.min(words.length, currentWordIndex + 35);
+    let bestIdx = currentWordIndex;
+    let bestScore = 0;
+
+    for (let i = searchStart; i < searchEnd; i++) {
+      // 贪心拼接候选文本
+      let candidate = '';
+      let j = i;
+      while (j < searchEnd && candidate.length < cleanRecognized.length + 15) {
+        candidate += getCleanWord(j);
+        j++;
+      }
+
+      // 计算匹配分：识别文本中有多少连续 N-gram 出现在候选文本中
+      const score = matchScore(cleanRecognized, candidate);
+      // 位置偏好：当前词之后的候选加权更高
+      const bias = i >= currentWordIndex ? 1.0 : 0.3;
+      const weighted = score * bias;
+
+      if (weighted > bestScore) {
+        bestScore = weighted;
+        bestIdx = i;
+      }
+    }
+
+    // 有足够置信度才更新
+    if (bestScore >= 2 && bestIdx >= currentWordIndex) {
+      highlightWord(bestIdx);
+      scrollToWord(bestIdx);
+      updateSpeechSpeed(bestIdx);
+    }
+  }
+
+  // 快速匹配分：用 tri-gram 命中数衡量
+  function matchScore(short, long) {
+    if (!short || !long) return 0;
+    let hits = 0;
+    // 3-gram 滑动匹配
+    for (let i = 0; i <= short.length - 3; i++) {
+      const gram = short.substring(i, i + 3);
+      if (long.includes(gram)) hits++;
+    }
+    // 额外的完整包含奖励
+    if (long.includes(short)) hits += short.length;
+    return hits;
+  }
+
+  function updateSpeechSpeed(wordIdx) {
+    // 用词在原文中的字符位置来估算语速
+    const charPos = (wordIdx >= 0 && wordIdx < words.length) ? words[wordIdx].charStart : wordIdx;
+    const now = performance.now();
+    speechHistory.push({ time: now, charPos });
+
+    // 只保留最近 12 秒的记录
+    const cutoff = now - 12000;
+    speechHistory = speechHistory.filter(h => h.time > cutoff);
+
+    if (speechHistory.length >= 4) {
+      const first = speechHistory[0];
+      const last = speechHistory[speechHistory.length - 1];
+      const durationSec = (last.time - first.time) / 1000;
+      const charDiff = last.charPos - first.charPos;
+
+      if (durationSec > 1.5 && charDiff > 0) {
+        userSpeechCPS = charDiff / durationSec;
+        // EMA 平滑：30% 新值 + 70% 旧值，避免跳变
+        baseCPS = baseCPS * 0.7 + userSpeechCPS * 0.3;
+        statusLabel.textContent = `🎤 语速 ≈${Math.round(userSpeechCPS)}字/秒`;
+      }
+    }
+  }
+
+  // ===================== 控制功能 =====================
+  function start() {
+    if (words.length === 0) {
+      alert('请先在编辑面板中粘贴脚本内容');
+      openEditor();
+      return;
+    }
+
+    isRunning = true;
+    lastScrollTime = performance.now();
+    speechHistory = [];
+    lastRecognizedText = '';
+
+    // 如果之前没开始过，从开头开始
+    if (currentWordIndex < 0) {
+      highlightWord(0);
+      scrollToWord(0);
+    }
+
+    // 启动语音识别
+    if (recognition && !isListening) {
+      try {
+        recognition.start();
+      } catch(e) {
+        // 可能已经在运行
+      }
+    }
+
+    // 启动滚动循环（语音 + 手动双重保障）
+    if (!scrollRAF) {
+      scrollRAF = requestAnimationFrame(manualScrollLoop);
+    }
+
+    updateStartButton();
+    editorPanel.classList.remove('open');
+  }
+
+  function stop() {
+    isRunning = false;
+    if (scrollRAF) {
+      cancelAnimationFrame(scrollRAF);
+      scrollRAF = null;
+    }
+    if (recognition && isListening) {
+      try { recognition.stop(); } catch(e) { /* ignore */ }
+    }
+    isListening = false;
+    statusDot.classList.remove('listening', 'speaking');
+    statusLabel.textContent = '已暂停';
+    interimTextEl.textContent = '';
+    if (recognitionRestartTimer) clearTimeout(recognitionRestartTimer);
+    updateStartButton();
+  }
+
+  function toggleRunning() {
+    if (isRunning) stop();
+    else start();
+  }
+
+  function resetPosition() {
+    stop();
+    currentWordIndex = -1;
+    prompterText.style.transform = 'translateY(0)';
+    lastRecognizedText = '';
+    speechHistory = [];
+    interimTextEl.textContent = '';
+    renderAllWords();
+    updatePositionInfo();
+    statusLabel.textContent = '已回到开头';
+    updateStartButton();
+  }
+
+  function toggleMirror() {
+    isMirror = !isMirror;
+    applyMirror();
+    updateMirrorButton();
+    saveSettings();
+  }
+
+  function applyMirror() {
+    if (isMirror) {
+      prompterView.classList.add('mirror');
+    } else {
+      prompterView.classList.remove('mirror');
+    }
+  }
+
+  function updateMirrorButton() {
+    btnMirror.textContent = isMirror ? '🪞✓' : '🪞';
+    if (isMirror) btnMirror.classList.add('active');
+    else btnMirror.classList.remove('active');
+  }
+
+  function updateStartButton() {
+    if (isRunning) {
+      btnStart.textContent = '⏸ 暂停';
+      btnStart.classList.add('danger');
+      btnStart.classList.remove('primary');
+    } else {
+      btnStart.textContent = recognition ? '🎤 开始提词' : '▶ 开始滚动';
+      btnStart.classList.add('primary');
+      btnStart.classList.remove('danger');
+    }
+  }
+
+  function updateSpeedDisplay() {
+    speedVal.textContent = manualSpeed.toFixed(1) + '×';
+  }
+
+  function applyFontSize() {
+    prompterText.style.setProperty('--font-size', fontSize + 'px');
+  }
+
+  // ===================== 编辑器 =====================
+  function openEditor() {
+    if (isRunning) stop();
+    editorPanel.classList.add('open');
+    scriptEditor.focus();
+  }
+
+  function closeEditor() {
+    editorPanel.classList.remove('open');
+  }
+
+  function applyEditorScript() {
+    const text = scriptEditor.value.trim();
+    if (text) {
+      loadScript(text);
+      currentWordIndex = -1;
+      prompterText.style.transform = 'translateY(0)';
+      saveSettings();
+      statusLabel.textContent = '脚本已加载 ✓';
+      updatePositionInfo();
+    }
+    closeEditor();
+  }
+
+  // ===================== 全屏 =====================
+  function toggleFullscreen() {
+    if (!document.fullscreenElement && !document.webkitFullscreenElement) {
+      const el = document.documentElement;
+      if (el.requestFullscreen) el.requestFullscreen().catch(() => {});
+      else if (el.webkitRequestFullscreen) el.webkitRequestFullscreen();
+      // iOS 特殊处理：某些版本需要视频元素才能全屏
+      // 降级方案：通过 CSS 模拟
+      if (!document.fullscreenEnabled && !document.webkitFullscreenEnabled) {
+        document.body.classList.toggle('pseudo-fullscreen');
+      }
+    } else {
+      if (document.exitFullscreen) document.exitFullscreen();
+      else if (document.webkitExitFullscreen) document.webkitExitFullscreen();
+      document.body.classList.remove('pseudo-fullscreen');
+    }
+  }
+
+  // ===================== 摄像头 & 录像 =====================
+  async function toggleCamera() {
+    if (cameraStream) {
+      stopCamera();
+      btnCamera.classList.remove('active');
+    } else {
+      try {
+        cameraStream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: 'user', width: { ideal: 480 }, height: { ideal: 480 } },
+          audio: false
+        });
+        cameraVideo.srcObject = cameraStream;
+        cameraWrap.classList.add('on');
+        prompterView.classList.add('has-camera');
+        btnCamera.classList.add('active');
+        btnRecord.disabled = false;
+        statusLabel.textContent = '📷 摄像头已开启';
+      } catch (err) {
+        console.warn('摄像头错误:', err);
+        if (err.name === 'NotAllowedError') {
+          alert('请在 Safari 设置中允许摄像头权限，然后刷新页面');
+        } else {
+          alert('摄像头不可用: ' + err.message);
+        }
+      }
+    }
+  }
+
+  function stopCamera() {
+    if (cameraStream) {
+      cameraStream.getTracks().forEach(t => t.stop());
+      cameraStream = null;
+    }
+    if (isRecording) stopRecording();
+    cameraVideo.srcObject = null;
+    cameraWrap.classList.remove('on');
+    prompterView.classList.remove('has-camera');
+    btnCamera.classList.remove('active');
+    btnRecord.disabled = true;
+    btnRecord.textContent = '⏺';
+    btnRecord.classList.remove('danger');
+  }
+
+  async function toggleRecording() {
+    if (isRecording) {
+      stopRecording();
+    } else {
+      await startRecording();
+    }
+  }
+
+  async function startRecording() {
+    if (!cameraStream) return;
+    // 需要重新获取含音频的流
+    let recStream = cameraStream;
+    try {
+      // 尝试添加音频轨道
+      const audioStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+      audioStream.getAudioTracks().forEach(t => recStream.addTrack(t));
+    } catch(e) { /* 无音频权限，仅录像 */ }
+
+    const mimeType = MediaRecorder.isTypeSupported('video/mp4;codecs=avc1') ? 'video/mp4;codecs=avc1'
+      : MediaRecorder.isTypeSupported('video/webm;codecs=vp9') ? 'video/webm;codecs=vp9'
+      : 'video/webm';
+
+    recordedChunks = [];
+    mediaRecorder = new MediaRecorder(recStream, { mimeType });
+    mediaRecorder.ondataavailable = (e) => { if (e.data.size > 0) recordedChunks.push(e.data); };
+    mediaRecorder.onstop = () => {
+      const blob = new Blob(recordedChunks, { type: mimeType });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url; a.download = `prompter-${new Date().toISOString().slice(0,19).replace(/:/g,'-')}.mp4`;
+      document.body.appendChild(a); a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      recordedChunks = [];
+    };
+
+    mediaRecorder.start();
+    isRecording = true;
+    recStartTime = Date.now();
+    recDot.classList.add('active');
+    btnRecord.textContent = '⏹';
+    btnRecord.classList.add('danger');
+    recTimer.classList.add('show');
+    updateRecTimer();
+    recTimerInterval = setInterval(updateRecTimer, 1000);
+    statusLabel.textContent = '🔴 录像中…';
+  }
+
+  function stopRecording() {
+    if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+      mediaRecorder.stop();
+    }
+    isRecording = false;
+    recDot.classList.remove('active');
+    btnRecord.textContent = '⏺';
+    btnRecord.classList.remove('danger');
+    if (recTimerInterval) clearInterval(recTimerInterval);
+    recTimer.classList.remove('show');
+    statusLabel.textContent = '✅ 录像已保存';
+  }
+
+  function updateRecTimer() {
+    const elapsed = Math.floor((Date.now() - recStartTime) / 1000);
+    const m = Math.floor(elapsed / 60).toString().padStart(2, '0');
+    const s = (elapsed % 60).toString().padStart(2, '0');
+    recTimer.textContent = `${m}:${s}`;
+  }
+
+  // ===================== 画中画浮窗（Canvas → Video → PiP） =====================
+  function renderPipFrame() {
+    const ctx = pipCanvas.getContext('2d');
+    const W = pipCanvas.width;
+    const H = pipCanvas.height;
+
+    // 深色背景
+    ctx.fillStyle = '#000';
+    ctx.fillRect(0, 0, W, H);
+
+    // 有摄像头时在顶部画小圆预览
+    if (cameraVideo.srcObject && cameraVideo.readyState >= 2) {
+      const camR = 36;
+      const camX = W / 2;
+      const camY = 44;
+      ctx.save();
+      ctx.beginPath();
+      ctx.arc(camX, camY, camR, 0, Math.PI * 2);
+      ctx.closePath();
+      ctx.clip();
+      // 前置摄像头镜像
+      ctx.scale(-1, 1);
+      ctx.drawImage(cameraVideo, -(camX + camR), camY - camR, camR * 2, camR * 2);
+      ctx.restore();
+      // 边框
+      ctx.beginPath();
+      ctx.arc(camX, camY, camR, 0, Math.PI * 2);
+      ctx.strokeStyle = 'rgba(255,255,255,0.3)';
+      ctx.lineWidth = 1.5;
+      ctx.stroke();
+    }
+
+    // 提词文字
+    if (words.length > 0 && currentWordIndex >= 0) {
+      const textTop = cameraVideo.srcObject ? 100 : 50;
+      const fontSize = 32;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+
+      // 当前词
+      const curWord = words[currentWordIndex];
+      ctx.font = `bold ${fontSize}px "PingFang SC", -apple-system, sans-serif`;
+      ctx.fillStyle = '#ffcc00';
+      ctx.fillText(curWord.text, W / 2, textTop);
+
+      // 后面几个词
+      ctx.font = `${fontSize * 0.8}px "PingFang SC", -apple-system, sans-serif`;
+      ctx.fillStyle = 'rgba(255,255,255,0.6)';
+      let nextText = '';
+      for (let i = currentWordIndex + 1; i < Math.min(words.length, currentWordIndex + 8); i++) {
+        nextText += words[i].text;
+      }
+      if (nextText.length > 20) nextText = nextText.slice(0, 20) + '…';
+      ctx.fillText(nextText, W / 2, textTop + 48);
+    } else {
+      ctx.font = 'bold 24px "PingFang SC", -apple-system, sans-serif';
+      ctx.fillStyle = 'rgba(255,255,255,0.4)';
+      ctx.textAlign = 'center';
+      ctx.fillText('等待开始…', W / 2, H / 2 - 10);
+    }
+
+    // 底部提示
+    ctx.font = '11px -apple-system, sans-serif';
+    ctx.fillStyle = 'rgba(255,255,255,0.25)';
+    ctx.textAlign = 'center';
+    ctx.fillText('PiP 浮窗 — 切换到相机 App 即可', W / 2, H - 16);
+  }
+
+  function startPipLoop() {
+    function frame() {
+      if (!pipActive) { pipAnimId = null; return; }
+      renderPipFrame();
+      pipAnimId = requestAnimationFrame(frame);
+    }
+    pipAnimId = requestAnimationFrame(frame);
+  }
+
+  async function togglePiP() {
+    // 如果已在 PiP 中，退出
+    if (pipActive) {
+      pipActive = false;
+      if (pipAnimId) cancelAnimationFrame(pipAnimId);
+      pipVideo.srcObject = null;
+      if (document.pictureInPictureElement) {
+        await document.exitPictureInPicture().catch(() => {});
+      }
+      statusLabel.textContent = '就绪';
+      return;
+    }
+
+    // 渲染首帧
+    renderPipFrame();
+    // Canvas → MediaStream → Video
+    const stream = pipCanvas.captureStream(30);
+    pipVideo.srcObject = stream;
+    pipVideo.muted = true;
+    pipVideo.playsInline = true;
+    await pipVideo.play();
+
+    pipActive = true;
+    startPipLoop();
+
+    // 进入 PiP
+    try {
+      if (pipVideo.webkitSetPresentationMode) {
+        // iOS Safari
+        pipVideo.webkitSetPresentationMode('picture-in-picture');
+        statusLabel.textContent = '🖼 浮窗已打开 → 切换到相机 App';
+      } else if (pipVideo.requestPictureInPicture) {
+        await pipVideo.requestPictureInPicture();
+        statusLabel.textContent = '🖼 浮窗已打开 → 切换到相机 App';
+      } else {
+        // 降级：尝试 Document PiP
+        if ('documentPictureInPicture' in window) {
+          const pipWin = await documentPictureInPicture.requestWindow({
+            width: pipCanvas.width, height: pipCanvas.height
+          });
+          const v = document.createElement('video');
+          v.srcObject = stream;
+          v.autoplay = true; v.playsInline = true; v.muted = true;
+          v.style.cssText = 'width:100%;height:100%;object-fit:contain;background:#000';
+          pipWin.document.body.style.margin = '0';
+          pipWin.document.body.appendChild(v);
+          pipWin.addEventListener('pagehide', () => {
+            pipActive = false;
+            if (pipAnimId) cancelAnimationFrame(pipAnimId);
+            v.srcObject = null;
+          });
+          statusLabel.textContent = '🖼 浮窗已打开 → 切换到相机 App';
+        } else {
+          pipActive = false;
+          if (pipAnimId) cancelAnimationFrame(pipAnimId);
+          alert('此浏览器不支持画中画。\n请使用 📷 内置摄像头预览。');
+        }
+      }
+    } catch(e) {
+      pipActive = false;
+      if (pipAnimId) cancelAnimationFrame(pipAnimId);
+      console.warn('PiP失败:', e);
+      alert('画中画启动失败，请使用 📷 内置摄像头预览');
+    }
+  }
+
+  function stopPiP() {
+    pipActive = false;
+    if (pipAnimId) { cancelAnimationFrame(pipAnimId); pipAnimId = null; }
+    pipVideo.srcObject = null;
+    if (document.pictureInPictureElement) {
+      document.exitPictureInPicture().catch(() => {});
+    }
+  }
+
+  // ===================== 设置持久化 =====================
+  function saveSettings() {
+    const settings = {
+      script: scriptEditor.value,
+      fontSize: fontSize,
+      speed: manualSpeed,
+      mirror: isMirror
+    };
+    try {
+      localStorage.setItem('teleprompter-settings', JSON.stringify(settings));
+    } catch(e) { /* quota exceeded, ignore */ }
+  }
+
+  function loadSettings() {
+    try {
+      const raw = localStorage.getItem('teleprompter-settings');
+      if (raw) return JSON.parse(raw);
+    } catch(e) { /* ignore */ }
+    return {};
+  }
+
+  // ===================== 事件绑定 =====================
+  function bindEvents() {
+    // 主按钮
+    btnStart.addEventListener('click', toggleRunning);
+
+    // 镜像
+    btnMirror.addEventListener('click', toggleMirror);
+
+    // 摄像头
+    btnCamera.addEventListener('click', toggleCamera);
+
+    // 录像
+    btnRecord.addEventListener('click', toggleRecording);
+
+    // 画中画浮窗
+    btnFullscreen.addEventListener('click', togglePiP);
+
+    // 回到开头
+    $('#btn-reset').addEventListener('click', resetPosition);
+
+    // 速度滑块
+    speedSlider.addEventListener('input', () => {
+      manualSpeed = parseFloat(speedSlider.value);
+      updateSpeedDisplay();
+      saveSettings();
+    });
+
+    // 字号滑块
+    fontSlider.addEventListener('input', () => {
+      fontSize = parseInt(fontSlider.value);
+      applyFontSize();
+      saveSettings();
+    });
+
+    // 脚本编辑按钮
+    $('#btn-script').addEventListener('click', openEditor);
+    $('#btn-editor-cancel').addEventListener('click', closeEditor);
+    $('#btn-editor-apply').addEventListener('click', applyEditorScript);
+
+    // 键盘快捷键
+    document.addEventListener('keydown', (e) => {
+      switch(e.key) {
+        case ' ':
+          e.preventDefault();
+          toggleRunning();
+          break;
+        case 'Escape':
+          if (editorPanel.classList.contains('open')) {
+            closeEditor();
+          } else if (isRunning) {
+            stop();
+          }
+          break;
+        case 'ArrowUp':
+          e.preventDefault();
+          manualSpeed = Math.min(3, manualSpeed + 0.1);
+          speedSlider.value = manualSpeed;
+          updateSpeedDisplay();
+          saveSettings();
+          break;
+        case 'ArrowDown':
+          e.preventDefault();
+          manualSpeed = Math.max(0.5, manualSpeed - 0.1);
+          speedSlider.value = manualSpeed;
+          updateSpeedDisplay();
+          saveSettings();
+          break;
+        case 'm':
+          if (!e.ctrlKey && !e.metaKey) {
+            toggleMirror();
+          }
+          break;
+        case 'f':
+          if (!e.ctrlKey && !e.metaKey && !editorPanel.classList.contains('open')) {
+            e.preventDefault();
+            togglePiP();
+          }
+          break;
+      }
+    });
+
+    // 触摸滑动调整速度
+    let touchStartY = 0;
+    let touchStartSpeed = 0;
+    prompterView.addEventListener('touchstart', (e) => {
+      if (e.touches.length === 2) {
+        touchStartY = e.touches[0].clientY;
+        touchStartSpeed = manualSpeed;
+      }
+    }, { passive: true });
+
+    prompterView.addEventListener('touchmove', (e) => {
+      if (e.touches.length === 2 && touchStartY > 0) {
+        const deltaY = touchStartY - e.touches[0].clientY;
+        const newSpeed = Math.max(0.5, Math.min(3, touchStartSpeed + deltaY / 200));
+        manualSpeed = Math.round(newSpeed * 10) / 10;
+        speedSlider.value = manualSpeed;
+        updateSpeedDisplay();
+      }
+    }, { passive: true });
+
+    prompterView.addEventListener('touchend', () => {
+      if (touchStartY > 0) {
+        saveSettings();
+        touchStartY = 0;
+      }
+    });
+
+    // 离开页面时保存并释放摄像头
+    window.addEventListener('beforeunload', () => { saveSettings(); stopCamera(); stopPiP(); });
+    window.addEventListener('pagehide', () => { saveSettings(); stopCamera(); stopPiP(); });
+
+    // 页面隐藏时释放摄像头（切后台时省电）
+    document.addEventListener('visibilitychange', () => {
+      if (document.hidden) {
+        saveSettings();
+        // 注意：PiP 浮窗在切后台时应该保留，不要关闭
+      }
+    });
+
+    // PiP 退出事件
+    pipVideo.addEventListener('leavepictureinpicture', () => {
+      pipActive = false;
+      if (pipAnimId) cancelAnimationFrame(pipAnimId);
+    });
+  }
+
+  // ===================== 启动 =====================
+  init();
+
+  console.log('📺 智能提词器已就绪');
+  console.log('  - 空格键：开始/暂停');
+  console.log('  - 上下箭头：调整速度');
+  console.log('  - M 键：镜像翻转');
+  console.log('  - F 键：画中画浮窗');
+  console.log('  - Esc：停止/关闭编辑');
+  console.log('  - 📷 摄像头预览 + ⏺ 录像 + 🖼 画中画浮窗');
+  if (window.SpeechRecognition || window.webkitSpeechRecognition) {
+    console.log('  - 🎤 语音识别可用，将自动跟踪你的语速');
+  } else {
+    console.log('  - ⚠️ 语音识别不可用，使用手动匀速模式');
+  }
+
+  // ===================== PWA 注册 =====================
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+      navigator.serviceWorker.register('./sw.js', { scope: './' })
+        .then((reg) => {
+          console.log('📦 Service Worker 已注册:', reg.scope);
+          // 检测更新
+          reg.addEventListener('updatefound', () => {
+            const newWorker = reg.installing;
+            if (newWorker) {
+              newWorker.addEventListener('statechange', () => {
+                if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+                  console.log('🔄 新版本已缓存，刷新页面更新');
+                }
+              });
+            }
+          });
+        })
+        .catch((err) => console.warn('Service Worker 注册失败:', err));
+    });
+
+    // 监听 PWA 安装事件
+    let deferredPrompt = null;
+    window.addEventListener('beforeinstallprompt', (e) => {
+      e.preventDefault();
+      deferredPrompt = e;
+      console.log('📲 PWA 可安装');
+    });
+
+    window.addEventListener('appinstalled', () => {
+      console.log('✅ PWA 已安装到主屏幕');
+      deferredPrompt = null;
+    });
+  }
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#1a1a2e"/>
+      <stop offset="100%" stop-color="#0f0f1a"/>
+    </linearGradient>
+  </defs>
+  <!-- 背景 -->
+  <rect width="512" height="512" rx="92" ry="92" fill="url(#bg)"/>
+  <!-- 提词器屏幕 -->
+  <rect x="92" y="62" width="328" height="282" rx="31" ry="31" fill="#000" stroke="#333" stroke-width="10"/>
+  <!-- 文字行 -->
+  <rect x="131" y="125" width="246" height="14" rx="7" fill="#ffcc00" opacity="0.6"/>
+  <rect x="131" y="155" width="260" height="14" rx="7" fill="#ffffff"/>
+  <rect x="122" y="147" width="4" height="32" rx="2" fill="#ffcc00"/>
+  <rect x="131" y="185" width="230" height="14" rx="7" fill="#ffcc00" opacity="0.78"/>
+  <rect x="131" y="215" width="240" height="14" rx="7" fill="#ffcc00" opacity="0.6"/>
+  <!-- 麦克风图标 -->
+  <circle cx="256" cy="390" r="30" fill="#ffcc00"/>
+  <rect x="248" y="405" width="16" height="40" rx="8" fill="#ffcc00"/>
+  <rect x="238" y="430" width="36" height="12" rx="6" fill="#ffcc00"/>
+  <!-- T 字母 -->
+  <text x="256" y="480" font-size="72" font-weight="bold" fill="#ffcc00" text-anchor="middle" font-family="system-ui, -apple-system, sans-serif" letter-spacing="-2">T</text>
+</svg>
