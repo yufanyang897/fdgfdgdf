@@ -111,14 +111,13 @@
     width: 100%;
     max-height: 100%;
     font-size: var(--font-size, 42px);
-    line-height: 1.6;
+    line-height: var(--line-height, 1.6);
     font-weight: 700;
     letter-spacing: 0.02em;
     text-align: center;
     word-break: break-word;
     transition: transform 0.1s linear;
     will-change: transform;
-    /* 录制模式下文字带半透明黑底 */
     text-shadow: 0 0 0 transparent;
     padding: 16px 8px;
     border-radius: 12px;
@@ -253,6 +252,28 @@
   .pos-btns button.active {
     background: var(--accent);
     color: #000;
+  }
+
+  /* 颜色按钮 */
+  .color-btns {
+    display: flex;
+    gap: 3px;
+  }
+  .color-btns button {
+    min-height: 26px;
+    padding: 2px 8px;
+    font-size: 10px;
+    border-radius: 5px;
+    border: 1px solid #555;
+  }
+  .color-btns button.active {
+    border-color: var(--accent);
+    box-shadow: 0 0 6px rgba(255,204,0,0.4);
+  }
+
+  /* 隐藏文件输入 */
+  #file-input {
+    display: none;
   }
 
   /* ============ 脚本编辑面板 ============ */
@@ -523,16 +544,31 @@
         <input type="range" id="font-slider" min="20" max="72" step="2" value="42">
       </div>
     </div>
+    <div class="btn-row">
+      <div class="slider-group">
+        <label>行距</label>
+        <input type="range" id="line-height-slider" min="1.2" max="3" step="0.1" value="1.6">
+        <span class="speed-val" id="line-height-val">1.6</span>
+      </div>
+      <span class="setting-label" style="min-width:24px;">字色</span>
+      <div class="color-btns" id="text-color-btns">
+        <button data-color="#ffffff" class="active" style="background:#fff;color:#000;">白</button>
+        <button data-color="#ffcc00" style="background:#ffcc00;color:#000;">黄</button>
+        <button data-color="#00ff88" style="background:#00ff88;color:#000;">绿</button>
+      </div>
+    </div>
   </div>
 
   <!-- 脚本编辑面板 -->
   <div id="editor-panel">
     <textarea id="script-editor" placeholder="在此粘贴或输入你的讲稿…&#10;&#10;每行一段，开始提词后 AI 会自动跟随你的语速滚动文案。"></textarea>
     <div class="btn-row">
+      <button id="btn-editor-import">📂 导入文件</button>
       <button id="btn-editor-cancel">取消</button>
       <button id="btn-editor-apply" class="primary">✅ 确认并加载</button>
     </div>
   </div>
+  <input type="file" id="file-input" accept=".txt,.md,.text">
 
   <!-- 隐藏的 PiP 元素 -->
   <canvas id="pip-canvas" width="400" height="300"></canvas>
@@ -577,6 +613,11 @@
   const cameraFpsBtns = $('#camera-fps-btns');
   const pipCanvas = $('#pip-canvas');
   const pipVideo = $('#pip-video');
+  const lineHeightSlider = $('#line-height-slider');
+  const lineHeightVal = $('#line-height-val');
+  const textColorBtns = $('#text-color-btns');
+  const fileInput = $('#file-input');
+  const btnEditorImport = $('#btn-editor-import');
 
   // ===================== 状态 =====================
   let words = [];
@@ -588,6 +629,8 @@
   let manualSpeed = 1.0;
   let baseCPS = 4;
   let fontSize = 42;
+  let lineHeight = 1.6;          // 行间距
+  let textColor = '#ffffff';     // 文字颜色
   let scrollRAF = null;
   let lastScrollTime = 0;
   let speechHistory = [];
@@ -626,6 +669,8 @@
     const saved = loadSettings();
     if (saved.script) scriptEditor.value = saved.script;
     if (saved.fontSize) { fontSize = saved.fontSize; fontSlider.value = fontSize; }
+    if (saved.lineHeight) { lineHeight = saved.lineHeight; lineHeightSlider.value = lineHeight; }
+    if (saved.textColor) { textColor = saved.textColor; }
     if (saved.speed) { manualSpeed = saved.speed; speedSlider.value = manualSpeed; }
     if (saved.mirror) { isMirror = saved.mirror; }
     if (saved.overlayOpacity) { overlayOpacity = saved.overlayOpacity; overlayOpacitySlider.value = Math.round(overlayOpacity * 100); }
@@ -637,6 +682,8 @@
     if (saved.cameraFPS) { cameraFPS = saved.cameraFPS; }
 
     applyFontSize();
+    applyLineHeight();
+    applyTextColor();
     applyMirror();
     applyOverlaySettingsUI();
     applyCameraSettingsUI();
@@ -912,6 +959,18 @@
   }
   function updateSpeedDisplay() { speedVal.textContent = manualSpeed.toFixed(1) + '×'; }
   function applyFontSize() { prompterText.style.setProperty('--font-size', fontSize + 'px'); }
+  function applyLineHeight() {
+    prompterText.style.setProperty('--line-height', lineHeight);
+    lineHeightSlider.value = lineHeight;
+    lineHeightVal.textContent = lineHeight;
+  }
+  function applyTextColor() {
+    prompterText.style.color = textColor;
+    // 更新已读词的 dim color
+    prompterText.style.setProperty('--text', textColor);
+    // 高亮当前词颜色按钮
+    textColorBtns.querySelectorAll('button').forEach(b => b.classList.toggle('active', b.dataset.color === textColor));
+  }
 
   // ===================== 叠加设置 =====================
   function applyOverlaySettingsUI() {
@@ -1209,7 +1268,7 @@
 
   // ===================== 设置持久化 =====================
   function saveSettings() {
-    const s = { script: scriptEditor.value, fontSize, speed: manualSpeed, mirror: isMirror, overlayOpacity, overlayFontSize, overlayWidth, overlayX, overlayY, cameraRes, cameraFPS };
+    const s = { script: scriptEditor.value, fontSize, lineHeight, textColor, speed: manualSpeed, mirror: isMirror, overlayOpacity, overlayFontSize, overlayWidth, overlayX, overlayY, cameraRes, cameraFPS };
     try { localStorage.setItem('teleprompter-settings', JSON.stringify(s)); } catch(e) {}
   }
   function loadSettings() {
@@ -1227,11 +1286,35 @@
     $('#btn-script').addEventListener('click', openEditor);
     $('#btn-editor-cancel').addEventListener('click', closeEditor);
     $('#btn-editor-apply').addEventListener('click', applyEditorScript);
+    // 文件导入
+    btnEditorImport.addEventListener('click', () => fileInput.click());
+    fileInput.addEventListener('change', () => {
+      const file = fileInput.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = () => {
+        scriptEditor.value = reader.result;
+        statusLabel.textContent = `📂 已导入: ${file.name}`;
+      };
+      reader.onerror = () => alert('文件读取失败');
+      reader.readAsText(file);
+      fileInput.value = ''; // 允许重复选同一个文件
+    });
 
     // 速度
     speedSlider.addEventListener('input', () => { manualSpeed = parseFloat(speedSlider.value); updateSpeedDisplay(); saveSettings(); });
     // 字号
     fontSlider.addEventListener('input', () => { fontSize = parseInt(fontSlider.value); if (!isRecordingMode) applyFontSize(); saveSettings(); });
+    // 行间距
+    lineHeightSlider.addEventListener('input', () => { lineHeight = parseFloat(lineHeightSlider.value); applyLineHeight(); saveSettings(); });
+    // 文字颜色
+    textColorBtns.addEventListener('click', (e) => {
+      const btn = e.target.closest('button');
+      if (!btn || !btn.dataset.color) return;
+      textColor = btn.dataset.color;
+      applyTextColor();
+      saveSettings();
+    });
 
     // 叠加透明度
     overlayOpacitySlider.addEventListener('input', () => {
