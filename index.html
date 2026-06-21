@@ -127,6 +127,8 @@
   #prompter-view.recording #prompter-text {
     background: var(--overlay-bg, rgba(0,0,0,0.55));
     padding: 20px 12px;
+    max-height: var(--overlay-max-height, 40vh);
+    overflow: hidden;
   }
 
   /* 每个词 */
@@ -521,6 +523,9 @@
     <span class="setting-label">框宽</span>
     <input type="range" id="overlay-width" min="50" max="100" step="5" value="75">
     <span class="setting-val" id="overlay-width-val">75%</span>
+    <span class="setting-label">框高</span>
+    <input type="range" id="overlay-height" min="20" max="80" step="5" value="40">
+    <span class="setting-val" id="overlay-height-val">40%</span>
   </div>
 
   <!-- 控制栏 -->
@@ -609,6 +614,8 @@
   const overlayFontVal = $('#overlay-font-val');
   const overlayWidthSlider = $('#overlay-width');
   const overlayWidthVal = $('#overlay-width-val');
+  const overlayHeightSlider = $('#overlay-height');
+  const overlayHeightVal = $('#overlay-height-val');
   const cameraResBtns = $('#camera-res-btns');
   const cameraFpsBtns = $('#camera-fps-btns');
   const pipCanvas = $('#pip-canvas');
@@ -641,7 +648,8 @@
   // 叠加设置
   let overlayOpacity = 0.55;
   let overlayFontSize = 28;
-  let overlayWidth = 75;           // 文字框宽度百分比 (60-100)
+  let overlayWidth = 75;
+  let overlayHeight = 40;          // 文字框最大高度百分比 (20-80)
   let overlayX = 50;               // 框中心 X 坐标 (%)
   let overlayY = 50;               // 框中心 Y 坐标 (%)
 
@@ -676,6 +684,7 @@
     if (saved.overlayOpacity) { overlayOpacity = saved.overlayOpacity; overlayOpacitySlider.value = Math.round(overlayOpacity * 100); }
     if (saved.overlayFontSize) { overlayFontSize = saved.overlayFontSize; overlayFontSlider.value = overlayFontSize; }
     if (saved.overlayWidth) { overlayWidth = saved.overlayWidth; overlayWidthSlider.value = overlayWidth; }
+    if (saved.overlayHeight) { overlayHeight = saved.overlayHeight; overlayHeightSlider.value = overlayHeight; }
     if (saved.overlayX !== undefined) { overlayX = saved.overlayX; }
     if (saved.overlayY !== undefined) { overlayY = saved.overlayY; }
     if (saved.cameraRes) { cameraRes = saved.cameraRes; }
@@ -980,6 +989,8 @@
     overlayFontVal.textContent = overlayFontSize;
     overlayWidthSlider.value = overlayWidth;
     overlayWidthVal.textContent = overlayWidth + '%';
+    overlayHeightSlider.value = overlayHeight;
+    overlayHeightVal.textContent = overlayHeight + '%';
     applyOverlayBg();
     applyOverlayPos();
     applyOverlayWidth();
@@ -1014,6 +1025,16 @@
       textOverlay.style.width = overlayWidth + '%';
     } else {
       textOverlay.style.width = '100%';
+    }
+  }
+
+  function applyOverlayHeight() {
+    if (isRecordingMode) {
+      prompterText.style.setProperty('--overlay-max-height', overlayHeight + 'vh');
+      overlayHeightVal.textContent = overlayHeight + '%';
+      overlayHeightSlider.value = overlayHeight;
+    } else {
+      prompterText.style.setProperty('--overlay-max-height', 'none');
     }
   }
 
@@ -1070,6 +1091,7 @@
       applyOverlayBg();
       applyOverlayPos();
       applyOverlayWidth();
+      applyOverlayHeight();
 
       // 录制模式下用叠加字号
       if (overlayFontSize !== fontSize) {
@@ -1114,6 +1136,7 @@
 
     // 恢复默认字号、宽度、位置
     prompterText.style.setProperty('--font-size', fontSize + 'px');
+    prompterText.style.setProperty('--overlay-max-height', 'none');
     textOverlay.style.width = '100%';
     textOverlay.style.left = '';
     textOverlay.style.top = '';
@@ -1268,7 +1291,7 @@
 
   // ===================== 设置持久化 =====================
   function saveSettings() {
-    const s = { script: scriptEditor.value, fontSize, lineHeight, textColor, speed: manualSpeed, mirror: isMirror, overlayOpacity, overlayFontSize, overlayWidth, overlayX, overlayY, cameraRes, cameraFPS };
+    const s = { script: scriptEditor.value, fontSize, lineHeight, textColor, speed: manualSpeed, mirror: isMirror, overlayOpacity, overlayFontSize, overlayWidth, overlayHeight, overlayX, overlayY, cameraRes, cameraFPS };
     try { localStorage.setItem('teleprompter-settings', JSON.stringify(s)); } catch(e) {}
   }
   function loadSettings() {
@@ -1432,6 +1455,13 @@
       overlayWidth = parseInt(overlayWidthSlider.value);
       overlayWidthVal.textContent = overlayWidth + '%';
       applyOverlayWidth();
+      saveSettings();
+    });
+    // 叠加框高
+    overlayHeightSlider.addEventListener('input', () => {
+      overlayHeight = parseInt(overlayHeightSlider.value);
+      overlayHeightVal.textContent = overlayHeight + '%';
+      applyOverlayHeight();
       saveSettings();
     });
 
